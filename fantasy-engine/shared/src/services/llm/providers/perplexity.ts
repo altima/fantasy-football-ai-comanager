@@ -85,7 +85,7 @@ export class PerplexityProvider extends BaseLLMProvider {
         const toolMatches = content.match(/(\w+):\s*({[^}]+})/g);
         if (toolMatches) {
           tool_calls = [];
-          toolMatches.forEach(match => {
+          toolMatches.forEach((match: string) => {
             const [, toolName, argsStr] = match.match(/(\w+):\s*({.+})/) || [];
             if (toolName && options.tools?.find(t => t.name === toolName)) {
               try {

@@ -79,7 +79,7 @@ export class OpenAIProvider extends BaseLLMProvider {
       }
       
       // Extract tool calls
-      const tool_calls = message.tool_calls?.map(tc => {
+      const tool_calls = message.tool_calls?.map((tc: any) => {
         if ('function' in tc) {
           return {
             name: tc.function.name,
@@ -87,7 +87,7 @@ export class OpenAIProvider extends BaseLLMProvider {
           };
         }
         return null;
-      }).filter((tc): tc is { name: string; arguments: any } => tc !== null);
+      }).filter((tc: { name: string; arguments: any } | null): tc is { name: string; arguments: any } => tc !== null);
       
       return {
         content: message.content || '',

@@ -277,42 +277,42 @@ export class AIWorkflowOrchestrator {
   private extractKeyInsights(llmResponse: any, task: string): string[] {
     const content = llmResponse.content || llmResponse.summary || llmResponse.analysis || '';
     
+    const taskInsights: { [key: string]: string[] } = {
+      'thursday_optimization': [
+        'Lineup optimization completed for Thursday games',
+        'Player projections analyzed for optimal starting lineup',
+        'Injury reports and matchup data considered'
+      ],
+      'sunday_check': [
+        'Final lineup review completed before games',
+        'Late injury news and inactive lists checked',
+        'Last-minute optimization recommendations provided'
+      ],
+      'monday_analysis': [
+        'Post-game performance analysis completed',
+        'Waiver wire targets identified based on needs',
+        'Weekly performance trends analyzed'
+      ],
+      'tuesday_waivers': [
+        'Waiver wire analysis completed',
+        'FAAB budget recommendations provided',
+        'Streaming options identified for upcoming week'
+      ]
+    };
+    
     // If content is empty, generate basic insights based on task
     if (!content || content.length < 50) {
-      const taskInsights: { [key: string]: string[] } = {
-        'thursday_optimization': [
-          'Lineup optimization completed for Thursday games',
-          'Player projections analyzed for optimal starting lineup',
-          'Injury reports and matchup data considered'
-        ],
-        'sunday_check': [
-          'Final lineup review completed before games',
-          'Late injury news and inactive lists checked',
-          'Last-minute optimization recommendations provided'
-        ],
-        'monday_analysis': [
-          'Post-game performance analysis completed',
-          'Waiver wire targets identified based on needs',
-          'Weekly performance trends analyzed'
-        ],
-        'tuesday_waivers': [
-          'Waiver wire analysis completed',
-          'FAAB budget recommendations provided',
-          'Streaming options identified for upcoming week'
-        ]
-      };
-      
       return taskInsights[task] || ['Fantasy analysis completed successfully'];
     }
     
     const insights: string[] = [];
     
     // Try to extract structured insights
-    const sentences = content.split(/[.!?]+/);
+    const sentences: string[] = content.split(/[.!?]+/);
     const meaningfulSentences = sentences
-      .filter(sentence => sentence.length > 10 && sentence.length < 150)
-      .map(sentence => sentence.trim())
-      .filter(sentence => sentence.length > 0);
+      .filter((sentence: string) => sentence.length > 10 && sentence.length < 150)
+      .map((sentence: string) => sentence.trim())
+      .filter((sentence: string) => sentence.length > 0);
     
     // Extract the most relevant sentences
     const keywordMap: { [key: string]: string[] } = {

@@ -14,7 +14,6 @@ import * as cheerio from 'cheerio';
 import {
   espnApi,
   llmConfig,
-  getRosterTool,
   getMyRoster,
   executeAIWorkflow
 } from '@fantasy-ai/shared';
@@ -105,7 +104,7 @@ async function alternativeSearch(query: string): Promise<string> {
       });
       
       const $ = cheerio.load(response.data);
-      const results = [];
+      const results: string[] = [];
       
       // Extract search results
       $('.search-results article').slice(0, 3).each((index, element) => {
