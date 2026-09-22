@@ -267,7 +267,14 @@ ${league.starters.map((p: any) => {
     startedDesc = `${category} (${startedPct}%)`;
   }
 
-  return `• ${p.fullName} (${p.position}) - ${projDesc} | ${ownedDesc} | ${startedDesc}`;
+  // Surface game-status flags (Questionable/Doubtful/Out/etc.) - these used to only
+  // show up for the separate IR list, so a starter tagged Out was invisible here.
+  let injuryFlag = '';
+  if (p.injuryStatus && p.injuryStatus.toUpperCase() !== 'ACTIVE') {
+    injuryFlag = ` | ⚠️ ${p.injuryStatus}`;
+  }
+
+  return `• ${p.fullName} (${p.position}) - ${projDesc} | ${ownedDesc} | ${startedDesc}${injuryFlag}`;
 }).join('\n') || 'No starters found'}
 
 BENCH:
@@ -316,7 +323,12 @@ ${league.bench.map((p: any) => {
     startedDesc = `${category} (${startedPct}%)`;
   }
 
-  return `• ${p.fullName} (${p.position}) - ${projDesc} | ${ownedDesc} | ${startedDesc}`;
+  let injuryFlag = '';
+  if (p.injuryStatus && p.injuryStatus.toUpperCase() !== 'ACTIVE') {
+    injuryFlag = ` | ⚠️ ${p.injuryStatus}`;
+  }
+
+  return `• ${p.fullName} (${p.position}) - ${projDesc} | ${ownedDesc} | ${startedDesc}${injuryFlag}`;
 }).join('\n') || 'No bench players found'}
 
 INJURED RESERVE (IR):
@@ -384,7 +396,12 @@ ${league.availablePlayers ? Object.entries(league.availablePlayers).map(([positi
       ownedDesc = `${ownedPct}% owned`;
     }
 
-    return `• ${p.fullName} - ${projDesc} | ${ownedDesc}`;
+    let injuryFlag = '';
+    if (p.injuryStatus && p.injuryStatus.toUpperCase() !== 'ACTIVE') {
+      injuryFlag = ` | ⚠️ ${p.injuryStatus}`;
+    }
+
+    return `• ${p.fullName} - ${projDesc} | ${ownedDesc}${injuryFlag}`;
   }).join('\n') : 'None available'}`
 ).join('\n') : 'Waiver wire data not available'}
 `).join('\n')}
@@ -392,6 +409,8 @@ ${expertDataSection}
 
 CO-MANAGER REVIEW INSTRUCTIONS:
 Review the roster like we're sitting together planning this week's lineup. Go position by position and tell me who to start, who to bench, and who to pick up from waivers. Be direct and decisive.
+
+IMPORTANT: Any player listed with a ⚠️ flag (QUESTIONABLE, DOUBTFUL, OUT, SUSPENSION, DAY_TO_DAY, etc.) has a real game-status concern this week - this applies to starters and bench players too, not just the IR section below. Never recommend starting or adding a player with an OUT or DOUBTFUL flag without calling that out explicitly, and prefer a healthy alternative when one is available with a comparable projection. Use web_search() to check the latest status on anyone flagged QUESTIONABLE close to game time.
 
 **POSITION-BY-POSITION REVIEW:**
 
