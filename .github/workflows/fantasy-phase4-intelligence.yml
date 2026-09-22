@@ -113,13 +113,29 @@ jobs:
           
           echo "intelligence_mode=$INTEL_MODE" >> $GITHUB_OUTPUT
           
-          # Calculate current NFL week
-          CURRENT_WEEK=$(node -e "
-            const now = new Date();
-            const seasonStart = new Date(now.getFullYear(), 8, 1);
-            const weeksSinceStart = Math.floor((now.getTime() - seasonStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
-            console.log(Math.max(1, Math.min(18, weeksSinceStart + 1)));
-          ")
+          # Calculate current NFL week - honor a manual override from
+          # workflow_dispatch's "week" input (this used to be accepted in the
+          # workflow_dispatch form but silently discarded - the auto-calculated
+          # value below was always used instead, regardless of what was typed
+          # in). Only present on workflow_dispatch runs; empty on schedule runs.
+          MANUAL_WEEK="${{ github.event.inputs.week }}"
+          if [[ -n "$MANUAL_WEEK" ]]; then
+            CURRENT_WEEK="$MANUAL_WEEK"
+          else
+            # Mirrors espnApi.ts's getCurrentWeek() so this and the actual ESPN
+            # data fetch never disagree on what week it is. The previous
+            # formula anchored the season start on Sep 1, which doesn't match
+            # the real kickoff (the Thursday after Labor Day, ~Sep 4-11
+            # depending on the year) and made this consistently report one
+            # week ahead of the real NFL week for most of September.
+            CURRENT_WEEK=$(node -e "
+              const now = new Date();
+              const year = now.getMonth() <= 1 ? now.getFullYear() - 1 : now.getFullYear();
+              const seasonStart = new Date(\`\${year}-09-04\`);
+              const daysDiff = Math.ceil((now.getTime() - seasonStart.getTime()) / (1000 * 3600 * 24));
+              console.log(daysDiff <= 0 ? 1 : Math.min(Math.ceil(daysDiff / 7), 18));
+            ")
+          fi
           echo "current_week=$CURRENT_WEEK" >> $GITHUB_OUTPUT
           
           # Initialize environment and validate configuration
