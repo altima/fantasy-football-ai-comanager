@@ -65,25 +65,41 @@ export class GeminiProvider extends BaseLLMProvider {
       // Handle function calling
       let tools: any;
       if (options?.tools && options.tools.length > 0) {
-        tools = [{
-          functionDeclarations: options.tools.map(tool => ({
-            name: tool.name,
-            description: tool.description,
-            parameters: {
-              type: 'object',
-              properties: tool.input_schema.properties,
-              required: tool.input_schema.required || []
-            }
-          }))
-        }];
-        
+        tools = [
+          {
+            functionDeclarations: options.tools.map(tool => ({
+              name: tool.name,
+              description: tool.description,
+              parameters: {
+                type: 'object',
+                properties: tool.input_schema.properties,
+                required: tool.input_schema.required || []
+              }
+            }))
+          },
+          // Gemini's own live Google Search grounding. 3.x models support combining
+          // this with custom function-declaration tools in one request, so it's added
+          // alongside whatever tools the caller passed rather than replacing them.
+          // The model decides on its own whether a query needs it. Unlike the custom
+          // web_search tool (which depends on SERPER_API_KEY/SCRAPINGDOG_API_KEY and
+          // otherwise degrades to a weak DuckDuckGo fallback), this needs no extra key
+          // - but each search the model runs is billed separately by Google on top of
+          // normal token costs, which getPricing() below does not account for.
+          { googleSearch: {} }
+        ];
+
         console.log('🔧 Gemini tools configured:', JSON.stringify(tools, null, 2));
       }
       
-      // Start chat session
+      // Start chat session.
+      // Mixing googleSearch with custom functionDeclarations requires explicitly opting
+      // in via toolConfig.includeServerSideToolInvocations, or the API rejects the
+      // request with a 400 ("Please enable tool_config.include_server_side_tool_invocations
+      // to use Built-in tools with Function calling"). Not in this SDK's TS types, so cast.
       const chat = model.startChat({
         history: geminiMessages.slice(0, -1), // All messages except the last
-        tools: tools
+        tools: tools,
+        ...(tools ? { toolConfig: { includeServerSideToolInvocations: true } as any } : {})
       });
       
       // Send the last message
@@ -124,7 +140,19 @@ export class GeminiProvider extends BaseLLMProvider {
       } else {
         console.log('📞 No function calls found in response');
       }
-      
+
+      // Surface Google Search grounding activity (if the model used it) so callers
+      // can tell real search happened and see what was searched/cited.
+      const groundingMetadata = (response.candidates?.[0] as any)?.groundingMetadata;
+      const groundingSearchQueries: string[] = groundingMetadata?.webSearchQueries || [];
+      const groundingSources: string[] = (groundingMetadata?.groundingChunks || [])
+        .map((chunk: any) => chunk.web?.uri)
+        .filter((uri: string | undefined): uri is string => !!uri);
+      if (groundingSearchQueries.length > 0) {
+        console.log(`🌐 Gemini grounded its answer with Google Search: ${groundingSearchQueries.join(', ')}`);
+        console.log(`🔗 Grounding sources: ${groundingSources.join(', ') || 'none returned'}`);
+      }
+
       return {
         content,
         tool_calls,
@@ -134,6 +162,9 @@ export class GeminiProvider extends BaseLLMProvider {
           total_tokens: response.usageMetadata?.totalTokenCount
         },
         finish_reason: this.mapFinishReason(response.candidates?.[0]?.finishReason),
+        grounding: groundingSearchQueries.length > 0
+          ? { searchQueries: groundingSearchQueries, sources: groundingSources }
+          : undefined,
         metadata: {
           provider: this.name,
           model: this.config.model,

@@ -36,6 +36,11 @@ export interface LLMResponse {
     total_tokens?: number;
   };
   finish_reason?: 'stop' | 'tool_calls' | 'length' | 'content_filter';
+  /** Present when the provider did its own live web search (e.g. Gemini's Google Search grounding). */
+  grounding?: {
+    searchQueries: string[];
+    sources: string[];
+  };
 }
 
 export interface LLMConfig {

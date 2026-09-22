@@ -182,35 +182,30 @@ export async function executeAIWorkflow(args: {
 
     // Create comprehensive prompt with real roster data and expert rankings
     const expertDataSection = expertRankings ? `
-EXPERT CONSENSUS RANKINGS (FantasyPros Week ${week.toString().replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)])}):
+EXPERT CONSENSUS RANKINGS (FantasyPros Week ${week}):
 ${Object.entries(expertRankings).map(([position, rankings]: [string, any]) => `
-${position.toUpperCase()} TOP ${['RB', 'WR'].includes(position) ? 'threezero' : 'onefive'} RANKINGS:
+${position.toUpperCase()} TOP ${['RB', 'WR'].includes(position) ? 30 : 15} RANKINGS:
 ${rankings.players?.slice(0, ['RB', 'WR'].includes(position) ? 30 : 15).map((p: any, i: number) => {
-  // Convert all numeric values to words to avoid GitHub secret redaction
-  const rankNum = i + 1;
-  const rankInWords = rankNum.toString().replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)]);
-  
-  const expertRankInWords = (p.expertConsensus || 'N/A').toString().replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)]);
-  
-  const tierInWords = (p.tier || 'N/A').toString().replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)]);
-  
+  const rank = i + 1;
+  const expertRank = p.expertConsensus ?? 'N/A';
+  const tier = p.tier ?? 'N/A';
+
   // Calculate consensus confidence based on ranking variance (lower stdDev = higher confidence)
   const confidenceScore = p.stdDev ? Math.max(100 - (p.stdDev * 10), 50) : 75;
-  const confidenceInWords = Math.round(confidenceScore).toString().replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)]);
-  
-  const bestRankInWords = (p.bestRank || 'N/A').toString().replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)]);
-  
-  const worstRankInWords = (p.worstRank || 'N/A').toString().replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)]);
-  
-  return `${rankInWords}. ${p.player.name} (${p.player.team}) - Expert Rank: ${expertRankInWords} | Tier: ${tierInWords} | Confidence: ${confidenceInWords}% | Range: ${bestRankInWords}-${worstRankInWords}`;
+  const confidence = Math.round(confidenceScore);
+
+  const bestRank = p.bestRank ?? 'N/A';
+  const worstRank = p.worstRank ?? 'N/A';
+
+  return `${rank}. ${p.player.name} (${p.player.team}) - Expert Rank: ${expertRank} | Tier: ${tier} | Confidence: ${confidence}% | Range: ${bestRank}-${worstRank}`;
 }).join('\n') || 'No rankings available'}
 
 `).join('\n')}
 
 FANTASY ANALYSIS GUIDELINES:
-• Lower Expert Rank = Better (one is best)
+• Lower Expert Rank = Better (1 is best)
 • Higher Expert Consensus % = More experts agree
-• Tier one-two = Elite players, Tier three-four = Good options, Tier five+ = Risky
+• Tier 1-2 = Elite players, Tier 3-4 = Good options, Tier 5+ = Risky
 • Smaller Rank Range (bestRank-worstRank) = More expert agreement
 • Compare your roster players against these expert rankings and tiers` : '\n⚠️ FantasyPros expert rankings not available - using ESPN data only\n';
 
@@ -218,7 +213,7 @@ FANTASY ANALYSIS GUIDELINES:
 
 CURRENT ROSTER DATA:
 ${leagueData.map(league => `
-${league.leagueName} (Team Name: ${league.teamName?.replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)])}):
+${league.leagueName} (Team Name: ${league.teamName}):
 
 STARTERS:
 ${league.starters.map((p: any) => {
@@ -227,11 +222,7 @@ ${league.starters.map((p: any) => {
   if (p.projectedPoints !== undefined && p.projectedPoints !== null) {
     const weeklyPts = p.projectedPoints;
     const seasonPts = (p as any).seasonProjectedPoints;
-    
-    // Convert weekly projection to words
-    const weeklyInWords = weeklyPts.toFixed(1).replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)]);
-    
-    // Add category for weekly projection
+
     let weeklyCategory = '';
     if (weeklyPts < 2) weeklyCategory = 'Very Low';
     else if (weeklyPts < 6) weeklyCategory = 'Low';
@@ -239,59 +230,52 @@ ${league.starters.map((p: any) => {
     else if (weeklyPts < 18) weeklyCategory = 'Good';
     else if (weeklyPts < 25) weeklyCategory = 'High';
     else weeklyCategory = 'Very High';
-    
-    projDesc = `Week ${weeklyCategory} (${weeklyInWords} pts)`;
-    
+
+    projDesc = `Week ${weeklyCategory} (${weeklyPts.toFixed(1)} pts)`;
+
     // Add season total if available and different
     if (seasonPts && seasonPts > 0 && Math.abs(seasonPts - weeklyPts) > 10) {
-      const seasonInWords = seasonPts.toFixed(1).replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)]);
-      projDesc += ` | Season (${seasonInWords} total)`;
+      projDesc += ` | Season (${seasonPts.toFixed(1)} total)`;
     }
   }
-  
+
   let ownedDesc = 'Unknown ownership';
   if (p.percentOwned !== undefined) {
     const ownedPct = Math.round(p.percentOwned);
-    const ownedInWords = ownedPct.toString().replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)]);
-    
+
     let category = '';
     if (ownedPct < 10) category = 'Rarely owned';
     else if (ownedPct < 30) category = 'Lightly owned';
     else if (ownedPct < 60) category = 'Moderately owned';
     else if (ownedPct < 90) category = 'Widely owned';
     else category = 'Nearly universal';
-    
-    ownedDesc = `${category} (${ownedInWords} percent)`;
+
+    ownedDesc = `${category} (${ownedPct}%)`;
   }
-  
+
   let startedDesc = 'Unknown usage';
   if (p.percentStarted !== undefined) {
     const startedPct = Math.round(p.percentStarted);
-    const startedInWords = startedPct.toString().replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)]);
-    
+
     let category = '';
     if (startedPct < 10) category = 'Rarely started';
     else if (startedPct < 30) category = 'Bench player';
     else if (startedPct < 60) category = 'Flex option';
     else if (startedPct < 90) category = 'Regular starter';
     else category = 'Must-start player';
-    
-    startedDesc = `${category} (${startedInWords} percent)`;
+
+    startedDesc = `${category} (${startedPct}%)`;
   }
-  
+
   return `• ${p.fullName} (${p.position}) - ${projDesc} | ${ownedDesc} | ${startedDesc}`;
 }).join('\n') || 'No starters found'}
 
 BENCH:
 ${league.bench.map((p: any) => {
-  // Convert ALL projections to words to avoid GitHub secret redaction
   let projDesc = 'Unknown projection';
   if (p.projectedPoints !== undefined && p.projectedPoints !== null) {
     const pts = p.projectedPoints;
-    // Convert the number to words for ALL values
-    const ptsInWords = pts.toFixed(1).replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)]);
-    
-    // Add category label for context
+
     let category = '';
     if (pts < 2) category = 'Very Low';
     else if (pts < 6) category = 'Low';
@@ -300,40 +284,38 @@ ${league.bench.map((p: any) => {
     else if (pts < 25) category = 'High';
     else if (pts < 50) category = 'Very High';
     else category = 'Season-total';
-    
-    projDesc = `${category} (${ptsInWords} points)`;
+
+    projDesc = `${category} (${pts.toFixed(1)} points)`;
   }
-  
+
   let ownedDesc = 'Unknown ownership';
   if (p.percentOwned !== undefined) {
     const ownedPct = Math.round(p.percentOwned);
-    const ownedInWords = ownedPct.toString().replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)]);
-    
+
     let category = '';
     if (ownedPct < 10) category = 'Rarely owned';
     else if (ownedPct < 30) category = 'Lightly owned';
     else if (ownedPct < 60) category = 'Moderately owned';
     else if (ownedPct < 90) category = 'Widely owned';
     else category = 'Nearly universal';
-    
-    ownedDesc = `${category} (${ownedInWords} percent)`;
+
+    ownedDesc = `${category} (${ownedPct}%)`;
   }
-  
+
   let startedDesc = 'Unknown usage';
   if (p.percentStarted !== undefined) {
     const startedPct = Math.round(p.percentStarted);
-    const startedInWords = startedPct.toString().replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)]);
-    
+
     let category = '';
     if (startedPct < 10) category = 'Rarely started';
     else if (startedPct < 30) category = 'Bench player';
     else if (startedPct < 60) category = 'Flex option';
     else if (startedPct < 90) category = 'Regular starter';
     else category = 'Must-start player';
-    
-    startedDesc = `${category} (${startedInWords} percent)`;
+
+    startedDesc = `${category} (${startedPct}%)`;
   }
-  
+
   return `• ${p.fullName} (${p.position}) - ${projDesc} | ${ownedDesc} | ${startedDesc}`;
 }).join('\n') || 'No bench players found'}
 
@@ -343,8 +325,7 @@ ${league.injuredReserve && league.injuredReserve.length > 0 ? league.injuredRese
   let projDesc = 'Unknown projection';
   if (p.projectedPoints !== undefined && p.projectedPoints !== null) {
     const pts = p.projectedPoints;
-    const ptsInWords = pts.toFixed(1).replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)]);
-    
+
     let category = '';
     if (pts < 2) category = 'Very Low';
     else if (pts < 6) category = 'Low';
@@ -352,61 +333,57 @@ ${league.injuredReserve && league.injuredReserve.length > 0 ? league.injuredRese
     else if (pts < 18) category = 'Good';
     else if (pts < 25) category = 'High';
     else category = 'Very High';
-    
-    projDesc = `${category} (${ptsInWords} pts)`;
+
+    projDesc = `${category} (${pts.toFixed(1)} pts)`;
   }
-  
+
   let ownedDesc = 'Unknown ownership';
   if (p.percentOwned !== undefined) {
     const ownedPct = Math.round(p.percentOwned);
-    const ownedInWords = ownedPct.toString().replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)]);
-    
+
     let category = '';
     if (ownedPct < 10) category = 'Rarely owned';
     else if (ownedPct < 30) category = 'Lightly owned';
     else if (ownedPct < 60) category = 'Moderately owned';
     else if (ownedPct < 90) category = 'Widely owned';
     else category = 'Nearly universal';
-    
-    ownedDesc = `${category} (${ownedInWords} percent)`;
+
+    ownedDesc = `${category} (${ownedPct}%)`;
   }
-  
+
   // Add injury status for IR players
   let injuryInfo = '';
   if (p.injuryStatus) {
     injuryInfo = ` | Injury: ${p.injuryStatus}`;
   }
-  
+
   return `• ${p.fullName} (${p.position}) - ${projDesc} | ${ownedDesc}${injuryInfo}`;
 }).join('\n') : 'No players on injured reserve'}
 
 AVAILABLE WAIVER WIRE/FREE AGENT PLAYERS BY POSITION:
-${league.availablePlayers ? Object.entries(league.availablePlayers).map(([position, players]: [string, any[]]) => 
+${league.availablePlayers ? Object.entries(league.availablePlayers).map(([position, players]: [string, any[]]) =>
   `${position}: ${players.length > 0 ? players.map((p: any) => {
-    // Format waiver wire players similar to roster players
     let projDesc = 'Unknown projection';
     if (p.projectedPoints !== undefined && p.projectedPoints !== null) {
       const pts = p.projectedPoints;
-      const ptsInWords = pts.toFixed(1).replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)]);
-      
+
       let category = '';
       if (pts < 2) category = 'Very Low';
-      else if (pts < 6) category = 'Low'; 
+      else if (pts < 6) category = 'Low';
       else if (pts < 12) category = 'Moderate';
       else if (pts < 18) category = 'Good';
       else if (pts < 25) category = 'High';
       else category = 'Very High';
-      
-      projDesc = `${category} (${ptsInWords} pts)`;
+
+      projDesc = `${category} (${pts.toFixed(1)} pts)`;
     }
-    
+
     let ownedDesc = 'Available';
     if (p.percentOwned !== undefined) {
       const ownedPct = Math.round(p.percentOwned);
-      const ownedInWords = ownedPct.toString().replace(/\d/g, (d: string) => ['zero','one','two','three','four','five','six','seven','eight','nine'][parseInt(d)]);
-      ownedDesc = `${ownedInWords}% owned`;
+      ownedDesc = `${ownedPct}% owned`;
     }
-    
+
     return `• ${p.fullName} - ${projDesc} | ${ownedDesc}`;
   }).join('\n') : 'None available'}`
 ).join('\n') : 'Waiver wire data not available'}
@@ -499,7 +476,10 @@ Use web_search() to check for any breaking injury news, weather concerns, or lin
     console.log('🤖 ========== LLM RESPONSE (WITH TOOL CALLING) END ==========\n');
 
     // Extract specific insights from LLM response
-    const insights = extractInsightsFromLLMResponse(llmResponse, leagueData);
+    const insights = extractInsightsFromLLMResponse(llmResponse, leagueData, {
+      hasExpertRankings: !!expertRankings,
+      searchesPerformed: llmResponse.searches_performed || 0
+    });
 
     const result = {
       success: true,
@@ -513,9 +493,13 @@ Use web_search() to check for any breaking injury news, weather concerns, or lin
       summary: {
         keyInsights: insights.keyInsights,
         confidence: insights.confidence,
-        dataSourcesUsed: expertRankings 
-          ? ['ESPN API', 'FantasyPros Expert Rankings', 'Real LLM Analysis']
-          : ['ESPN API', 'Real LLM Analysis (No FantasyPros)'],
+        dataSourcesUsed: [
+          'ESPN API',
+          ...(expertRankings ? ['FantasyPros Expert Rankings'] : []),
+          ...(llmResponse.grounding_sources?.length ? ['Live Web Search (Google Search grounding)'] : []),
+          expertRankings ? 'Real LLM Analysis' : 'Real LLM Analysis (No FantasyPros)'
+        ],
+        webSources: llmResponse.grounding_sources || [],
         fullLLMResponse: llmResponse.content || 'No response generated'
       },
       recommendations: leagueData.map(league => ({
@@ -554,56 +538,9 @@ Use web_search() to check for any breaking injury news, weather concerns, or lin
 }
 
 /**
- * Generate mock analysis based on real roster data
- */
-async function generateMockAnalysis(prompt: string, leagueData: any[]): Promise<any> {
-  console.log(`🤖 Generating mock analysis for ${leagueData.length} leagues...`);
-  
-  // Generate realistic recommendations based on actual roster data
-  const recommendations: string[] = [];
-  
-  leagueData.forEach(league => {
-    console.log(`🔍 Processing ${league.leagueName} - Starters: ${league.starters?.length}, Bench: ${league.bench?.length}`);
-    if (league.starters.length > 0) {
-      // Pick random starters/bench players for specific actionable recommendations
-      const starters = league.starters;
-      const bench = league.bench;
-      
-      if (starters.length > 2) {
-        const randomStarter = starters[Math.floor(Math.random() * starters.length)];
-        recommendations.push(`Start ${randomStarter.fullName} this week for favorable matchup advantage`);
-      }
-      
-      if (bench.length > 0) {
-        const randomBench = bench[Math.floor(Math.random() * bench.length)];
-        recommendations.push(`Consider ${randomBench.fullName} as flex option based on target share`);
-      }
-      
-      // Add more actionable recommendations that match extraction patterns
-      if (starters.length > 4) {
-        const anotherStarter = starters[Math.floor(Math.random() * starters.length)];
-        recommendations.push(`Target ${anotherStarter.fullName} for increased workload this week`);
-      }
-    } else {
-      // Expected if the league hasn't drafted yet; otherwise likely a cookie
-      // or league/team ID problem.
-      console.error(`⚠️ Empty roster data for ${league.leagueName}`);
-      throw new Error(`Empty roster returned for ${league.leagueName} (expected if the league hasn't drafted yet - if the draft has happened, check ESPN_S2/SWID cookies and the league/team IDs)`);
-    }
-  });
-  
-  return {
-    text: recommendations.join('\n\n'),
-    content: recommendations.join('\n\n'),
-    analysis: `Comprehensive analysis completed for ${leagueData.length} leagues with real roster data.`,
-    recommendations: recommendations
-  };
-}
-
-/**
  * Generate LLM response with web search tool calling capability
  */
-async function generateResponseWithWebSearchTools(prompt: string): Promise<{ content: string; cost?: number; searches_performed?: number }> {
+async function generateResponseWithWebSearchTools(prompt: string): Promise<{ content: string; cost?: number; searches_performed?: number; grounding_sources?: string[] }> {
   try {
     // Define the web search tool that LLM can call
     const webSearchTool = {
@@ -637,6 +574,10 @@ async function generateResponseWithWebSearchTools(prompt: string): Promise<{ con
     let searchCount = 0;
     const maxSearches = parseInt(process.env.MAX_WEB_SEARCHES || '5');
     let totalCost = 0;
+    // Searches the provider ran itself (e.g. Gemini's Google Search grounding), as
+    // opposed to searchCount above which is the custom web_search tool calls we execute.
+    const groundingQueries: string[] = [];
+    const groundingSources: string[] = [];
 
     // Start the conversation with tools available
     let messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [
@@ -665,6 +606,12 @@ async function generateResponseWithWebSearchTools(prompt: string): Promise<{ con
       console.log(`  - Usage: ${JSON.stringify(response.usage)}`);
 
       totalCost += (response.usage?.total_tokens || 0) * 0.000001; // Rough cost estimate
+
+      if (response.grounding?.searchQueries?.length) {
+        groundingQueries.push(...response.grounding.searchQueries);
+        groundingSources.push(...response.grounding.sources);
+        console.log(`🌐 Provider self-grounded with ${response.grounding.searchQueries.length} search(es): ${response.grounding.searchQueries.join(', ')}`);
+      }
 
       // Check if LLM wants to use tools
       if (response.tool_calls && response.tool_calls.length > 0 && searchCount < maxSearches) {
@@ -761,12 +708,13 @@ async function generateResponseWithWebSearchTools(prompt: string): Promise<{ con
       console.warn('⚠️ Reached maximum conversation turns without final response');
     }
 
-    console.log(`🔍 Web search tool calling complete. Searches: ${searchCount}/${maxSearches}, Cost: $${totalCost.toFixed(4)}`);
+    console.log(`🔍 Web search tool calling complete. Tool-call searches: ${searchCount}/${maxSearches}, Provider grounding searches: ${groundingQueries.length}, Cost: $${totalCost.toFixed(4)}`);
 
     return {
       content: finalResponse,
       cost: totalCost,
-      searches_performed: searchCount
+      searches_performed: searchCount + groundingQueries.length,
+      grounding_sources: groundingSources.length > 0 ? [...new Set(groundingSources)] : undefined
     };
 
   } catch (error: any) {
@@ -778,30 +726,65 @@ async function generateResponseWithWebSearchTools(prompt: string): Promise<{ con
 }
 
 /**
- * Extract actionable insights from LLM response - preserve complete analysis for Discord
+ * Extract actionable insights from LLM response - preserve complete analysis for Discord.
+ * `keyInsights` and `confidence` are also consumed outside Discord formatting (e.g. the
+ * Phase 4 performance grade and the thursday/monday/sunday command fallbacks), so they
+ * need to reflect the actual analysis rather than being permanently empty/hardcoded.
  */
-function extractInsightsFromLLMResponse(llmResponse: any, leagueData: any[]): {
+function extractInsightsFromLLMResponse(
+  llmResponse: any,
+  leagueData: any[],
+  context: { hasExpertRankings: boolean; searchesPerformed: number } = { hasExpertRankings: false, searchesPerformed: 0 }
+): {
   keyInsights: string[];
   recommendations: any[];
   confidence: number;
   analysis: string;
 } {
   const responseText = llmResponse.content || JSON.stringify(llmResponse);
-  
+
   console.log('📋 Sending COMPLETE LLM response directly to Discord (no summarization)...');
   console.log(`Response length: ${responseText.length} characters`);
-  
+
   // Clean up response formatting but preserve ALL content
   const cleanedResponse = responseText
     .replace(/\n\s*\n\s*\n/g, '\n\n') // Remove excessive line breaks only
     .trim();
-  
-  // Return minimal structure with FULL response
-  // keyInsights will be empty to prevent showing summary in Discord
+
+  // Pull out the actionable lines (ADD/DROP/ACTIVATE/START/BENCH) the prompt asks the
+  // LLM to produce. These aren't shown in the Discord message (which uses the full
+  // response directly) but are the signal other commands key off (grade calculation,
+  // thursday/monday/sunday fallbacks).
+  const actionLinePattern = /^[\s*_-]*\**(ADD|DROP|ACTIVATE|START|BENCH)\b.+/gim;
+  const keyInsights = (cleanedResponse.match(actionLinePattern) || [])
+    .map((line: string) => line.replace(/^[\s*_-]+/, '').replace(/\*+/g, '').trim())
+    .filter((line: string) => line.length > 0)
+    .slice(0, 10);
+
+  // Fall back to the first few substantive sentences when the response didn't follow
+  // the requested ADD/DROP format (e.g. a provider fallback response).
+  if (keyInsights.length === 0 && cleanedResponse.length >= 50) {
+    cleanedResponse
+      .split(/[.!?]+/)
+      .map((s: string) => s.trim())
+      .filter((s: string) => s.length > 15 && s.length < 200)
+      .slice(0, 3)
+      .forEach((s: string) => keyInsights.push(s));
+  }
+
+  // Confidence reflects how much real signal backed the analysis, not a flat constant:
+  // richer data sources and a substantive response raise it, a thin/empty one lowers it.
+  let confidence = 55;
+  if (context.hasExpertRankings) confidence += 15;
+  if (context.searchesPerformed > 0) confidence += 10;
+  if (cleanedResponse.length > 800) confidence += 10;
+  else if (cleanedResponse.length < 200) confidence -= 20;
+  confidence = Math.max(30, Math.min(95, confidence));
+
   return {
-    keyInsights: [], // Empty to prevent Discord from showing summary
+    keyInsights,
     recommendations: [], // Empty to avoid fragmenting the response
-    confidence: 95, // High confidence since we're showing full response
+    confidence,
     analysis: cleanedResponse // COMPLETE unfiltered LLM response for Discord
   };
 }
