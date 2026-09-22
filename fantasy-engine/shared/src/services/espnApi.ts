@@ -157,173 +157,22 @@ export class ESPNApiService {
         // - specific week number = that week's data
         // - 0 or null = season total
         
-        let weeklyProjection = 0;
-        let seasonTotal = 0;
-        let actualPoints = 0;
-        
         // Find current week for better projection targeting
         const currentWeek = this.getCurrentWeek();
-        
-        // Debug: Log all available stats to understand ESPN's data structure
-        if (process.env.DEBUG_ESPN && playerData.fullName) {
-          console.log(`\n🔍 DEBUG ${playerData.fullName} - All stats:`, JSON.stringify(stats, null, 2));
-        }
-        
-        // Look for weekly projections first (statSourceId 1 with current week)
-        const weeklyProjectionStat = stats.find((stat: any) => 
-          stat.statSourceId === 1 && 
-          stat.scoringPeriodId === currentWeek
-        );
-        
-        if (weeklyProjectionStat) {
-          weeklyProjection = weeklyProjectionStat.appliedTotal || 0;
-          if (process.env.DEBUG_ESPN && playerData.fullName) {
-            console.log(`✅ Found weekly projection for week ${currentWeek}:`, weeklyProjection);
-          }
-        } else {
-          if (process.env.DEBUG_ESPN && playerData.fullName) {
-            console.log(`❌ No weekly projection found for week ${currentWeek} with statSourceId=1`);
-          }
-          
-          // Try different approaches to find weekly data
-          // 1. Look for projection stat with current week (but NOT actual points - statSourceId 0)
-          const currentWeekProjectionStat = stats.find((stat: any) => 
-            stat.scoringPeriodId === currentWeek && 
-            stat.statSourceId === 1 && 
-            stat.appliedTotal > 0 && 
-            stat.appliedTotal < 100
-          );
-          if (currentWeekProjectionStat) {
-            weeklyProjection = currentWeekProjectionStat.appliedTotal;
-            if (process.env.DEBUG_ESPN && playerData.fullName) {
-              console.log(`📊 Using current week projection stat:`, weeklyProjection);
-            }
-          } else {
-            // 2. Fallback: Find the smallest reasonable projection (likely weekly)
-            const projectionStats = stats.filter((stat: any) => 
-              stat.statSourceId === 1 && stat.appliedTotal > 0
-            ).sort((a: any, b: any) => a.appliedTotal - b.appliedTotal);
-            
-            if (projectionStats.length > 0) {
-              const smallestProjection = projectionStats[0].appliedTotal;
-              if (smallestProjection < 50) {
-                // This looks like a reasonable weekly projection
-                weeklyProjection = smallestProjection;
-                if (process.env.DEBUG_ESPN && playerData.fullName) {
-                  console.log(`🎯 Using smallest projection as weekly:`, weeklyProjection);
-                }
-              } else {
-                // All projections are large, they're likely season totals
-                // Use the largest one as season total and estimate weekly
-                const largestProjection = projectionStats[projectionStats.length - 1].appliedTotal;
-                weeklyProjection = largestProjection / 17;
-                if (process.env.DEBUG_ESPN && playerData.fullName) {
-                  console.log(`📉 No weekly projection found, estimated from largest season total (${largestProjection}):`, weeklyProjection.toFixed(1));
-                }
-              }
-            } else {
-              // No projection stats at all, use a conservative default
-              weeklyProjection = 0;
-              if (process.env.DEBUG_ESPN && playerData.fullName) {
-                console.log(`❌ No projection stats found, using 0`);
-              }
-            }
-          }
-        }
-        
+
+        const playerPosition = this.getPositionName(playerData.defaultPositionId || 0);
+        const { projectedPoints: finalProjectedPoints, seasonProjectedPoints: seasonTotal } =
+          this.resolveProjectedPoints(playerData.fullName || 'Unknown', playerPosition, stats, currentWeek);
+
         // Find actual points for current week
-        const actualStat = stats.find((stat: any) => 
-          stat.statSourceId === 0 && 
+        let actualPoints = 0;
+        const actualStat = stats.find((stat: any) =>
+          stat.statSourceId === 0 &&
           stat.scoringPeriodId === currentWeek
         );
-        
+
         if (actualStat) {
           actualPoints = actualStat.appliedTotal || 0;
-        }
-        
-        // Find season total projections (statSourceId 1, no specific scoring period)
-        const seasonProjectionStat = stats.find((stat: any) => 
-          stat.statSourceId === 1 && 
-          (!stat.scoringPeriodId || stat.scoringPeriodId === 0)
-        );
-        
-        if (seasonProjectionStat) {
-          seasonTotal = seasonProjectionStat.appliedTotal || 0;
-          if (process.env.DEBUG_ESPN && playerData.fullName) {
-            console.log(`Season total projection:`, seasonTotal);
-          }
-        }
-        
-        // IMPROVED: More intelligent weekly vs season projection detection
-        // Only convert if projection is clearly a season total (much higher thresholds)
-        const playerPosition = this.getPositionName(playerData.defaultPositionId || 0);
-        
-        // Set realistic but generous weekly maximums - allow for breakout performances
-        const reasonableWeeklyMax = {
-          'QB': 50,    // Elite QBs can score 40+ in good matchups
-          'RB': 40,    // Top RBs can have 35+ point games
-          'WR': 40,    // Elite WRs can have explosive games
-          'TE': 30,    // Top TEs can have big games
-          'D/ST': 35,  // Defenses can have huge games
-          'K': 25      // Kickers rarely exceed 20
-        }[playerPosition] || 35; // Default for unknown positions
-        
-        // Additional check: if we have a season total and weekly projection, 
-        // use that to determine if the weekly projection seems reasonable
-        let projectionSeemsSeasonal = false;
-        
-        if (seasonTotal > 0 && weeklyProjection > 0) {
-          // If weekly projection is more than 30% of season total, it's likely seasonal
-          const weeklyPercentOfSeason = (weeklyProjection / seasonTotal) * 100;
-          if (weeklyPercentOfSeason > 30) {
-            projectionSeemsSeasonal = true;
-            console.warn(`⚠️ PROJECTION ANALYSIS: ${playerData.fullName} weekly projection (${weeklyProjection}) is ${weeklyPercentOfSeason.toFixed(1)}% of season total (${seasonTotal})`);
-          }
-        }
-        
-        // Only convert if BOTH conditions are met: exceeds threshold AND seems seasonal
-        if (weeklyProjection > reasonableWeeklyMax && 
-            (projectionSeemsSeasonal || weeklyProjection > 100)) { // 100+ is almost certainly seasonal
-          console.warn(`⚠️ PROJECTION TRANSFORM: ${playerData.fullName} (${playerPosition})`);
-          console.warn(`   Original weekly projection: ${weeklyProjection}`);
-          console.warn(`   Threshold for ${playerPosition}: ${reasonableWeeklyMax}`);
-          console.warn(`   Season analysis: ${projectionSeemsSeasonal ? 'Seems seasonal' : 'Extremely high (>100)'}`);
-          console.warn(`   Converting to weekly estimate`);
-          
-          // Store as season total and estimate weekly
-          if (seasonTotal === 0) {
-            seasonTotal = weeklyProjection;
-          }
-          weeklyProjection = weeklyProjection / 17; // Estimate weekly from season total
-          
-          console.warn(`   New weekly estimate: ${weeklyProjection.toFixed(1)}`);
-          console.warn(`   Season total stored: ${seasonTotal}`);
-        } else if (weeklyProjection > reasonableWeeklyMax) {
-          // Log high but plausible projections without converting
-          console.log(`ℹ️ HIGH PROJECTION KEPT: ${playerData.fullName} (${playerPosition}) - ${weeklyProjection} pts (above ${reasonableWeeklyMax} threshold but seems legitimate)`);
-        }
-        
-        // Final safety check: Only cap extremely unrealistic projections (200+)
-        if (weeklyProjection > 200) {
-          console.warn(`⚠️ EXTREME PROJECTION CAP: ${playerData.fullName} has unrealistic projection (${weeklyProjection}), capping at 200`);
-          weeklyProjection = 200;
-        }
-        
-        if (process.env.DEBUG_ESPN && playerData.fullName) {
-          console.log(`Final values - Weekly: ${weeklyProjection}, Season: ${seasonTotal}, Actual: ${actualPoints}`);
-          console.log('=== END DEBUG ===\n');
-        }
-        
-        const finalProjectedPoints = weeklyProjection > 0 ? weeklyProjection : (seasonTotal > 0 ? seasonTotal / 17 : 0);
-        
-        // Log final player data creation for validation
-        if (finalProjectedPoints !== weeklyProjection || seasonTotal > 0) {
-          console.log(`📊 FINAL PLAYER DATA: ${playerData.fullName || 'Unknown'}`);
-          console.log(`   Position: ${this.getPositionName(playerData.defaultPositionId || 0)}`);
-          console.log(`   Final projected points (weekly): ${finalProjectedPoints.toFixed(1)}`);
-          console.log(`   Season projected points: ${seasonTotal || 'Not set'}`);
-          console.log(`   Actual points: ${actualPoints}`);
-          console.log(`   Data source: ${weeklyProjection > 0 ? 'Weekly projection' : 'Estimated from season'}`);
         }
 
         return {
@@ -540,38 +389,128 @@ export class ESPNApiService {
     return response.data.transactions || [];
   }
 
-  private processPlayerData(playerData: any): Player {
-    const player = playerData.player || playerData;
-    const stats = player.stats || [];
-    
-    // Use same logic as roster processing for consistency
-    const currentWeek = this.getCurrentWeek();
+  /**
+   * Disambiguate ESPN's weekly-vs-season projection stats. ESPN's `statSourceId 1`
+   * (projected) stats can show up as either a specific week or a season total under
+   * the same source id, and which one you get is inconsistent. Shared by roster and
+   * free-agent/waiver player parsing so both get the same, position-aware treatment
+   * - this used to be roster-only, which let inflated "weekly" waiver-wire numbers
+   * (e.g. 80-99 "points" for a bench-caliber free agent) through uncorrected, since
+   * the old free-agent path only caught projections over 100.
+   */
+  private resolveProjectedPoints(
+    fullName: string,
+    position: string,
+    stats: any[],
+    currentWeek: number
+  ): { projectedPoints: number; seasonProjectedPoints: number } {
     let weeklyProjection = 0;
-    let actualPoints = 0;
-    
-    // Look for weekly projections first
-    const weeklyProjectionStat = stats.find((stat: any) => 
-      stat.statSourceId === 1 && 
+    let seasonTotal = 0;
+
+    // Look for weekly projections first (statSourceId 1 with current week)
+    const weeklyProjectionStat = stats.find((stat: any) =>
+      stat.statSourceId === 1 &&
       stat.scoringPeriodId === currentWeek
     );
-    
+
     if (weeklyProjectionStat) {
       weeklyProjection = weeklyProjectionStat.appliedTotal || 0;
     } else {
-      // Fallback to any projection stat
-      const anyProjectionStat = stats.find((stat: any) => stat.statSourceId === 1);
-      if (anyProjectionStat) {
-        weeklyProjection = anyProjectionStat.appliedTotal || 0;
-        // If this looks like a season total (>100), estimate weekly
-        if (weeklyProjection > 100) {
-          weeklyProjection = weeklyProjection / 17;
+      // Try a looser match on the current week first...
+      const currentWeekProjectionStat = stats.find((stat: any) =>
+        stat.scoringPeriodId === currentWeek &&
+        stat.statSourceId === 1 &&
+        stat.appliedTotal > 0 &&
+        stat.appliedTotal < 100
+      );
+      if (currentWeekProjectionStat) {
+        weeklyProjection = currentWeekProjectionStat.appliedTotal;
+      } else {
+        // ...then fall back to the smallest available projection stat (likely
+        // weekly), or estimate from the largest (likely a season total) if every
+        // projection stat we have looks too big to be a single week.
+        const projectionStats = stats.filter((stat: any) =>
+          stat.statSourceId === 1 && stat.appliedTotal > 0
+        ).sort((a: any, b: any) => a.appliedTotal - b.appliedTotal);
+
+        if (projectionStats.length > 0) {
+          const smallestProjection = projectionStats[0].appliedTotal;
+          if (smallestProjection < 50) {
+            weeklyProjection = smallestProjection;
+          } else {
+            const largestProjection = projectionStats[projectionStats.length - 1].appliedTotal;
+            weeklyProjection = largestProjection / 17;
+          }
         }
       }
     }
-    
+
+    // Find season total projections (statSourceId 1, no specific scoring period)
+    const seasonProjectionStat = stats.find((stat: any) =>
+      stat.statSourceId === 1 &&
+      (!stat.scoringPeriodId || stat.scoringPeriodId === 0)
+    );
+    if (seasonProjectionStat) {
+      seasonTotal = seasonProjectionStat.appliedTotal || 0;
+    }
+
+    // Set realistic but generous weekly maximums - allow for breakout performances -
+    // above which a projection is almost certainly a season total, not a single week.
+    const reasonableWeeklyMax = {
+      'QB': 50, 'RB': 40, 'WR': 40, 'TE': 30, 'D/ST': 35, 'K': 25
+    }[position] || 35;
+
+    let projectionSeemsSeasonal = false;
+    if (seasonTotal > 0 && weeklyProjection > 0) {
+      // If weekly projection is more than 30% of season total, it's likely seasonal
+      const weeklyPercentOfSeason = (weeklyProjection / seasonTotal) * 100;
+      if (weeklyPercentOfSeason > 30) {
+        projectionSeemsSeasonal = true;
+        console.warn(`⚠️ PROJECTION ANALYSIS: ${fullName} weekly projection (${weeklyProjection}) is ${weeklyPercentOfSeason.toFixed(1)}% of season total (${seasonTotal})`);
+      }
+    }
+
+    // Only convert if BOTH conditions are met: exceeds threshold AND seems seasonal
+    if (weeklyProjection > reasonableWeeklyMax &&
+        (projectionSeemsSeasonal || weeklyProjection > 100)) { // 100+ is almost certainly seasonal
+      console.warn(`⚠️ PROJECTION TRANSFORM: ${fullName} (${position}) - original weekly ${weeklyProjection}, threshold ${reasonableWeeklyMax}, ${projectionSeemsSeasonal ? 'seems seasonal' : 'extremely high (>100)'} - converting to weekly estimate`);
+      if (seasonTotal === 0) {
+        seasonTotal = weeklyProjection;
+      }
+      weeklyProjection = weeklyProjection / 17; // Estimate weekly from season total
+    } else if (weeklyProjection > reasonableWeeklyMax) {
+      console.log(`ℹ️ HIGH PROJECTION KEPT: ${fullName} (${position}) - ${weeklyProjection} pts (above ${reasonableWeeklyMax} threshold but seems legitimate)`);
+    }
+
+    // Final safety check: only cap extremely unrealistic projections (200+)
+    if (weeklyProjection > 200) {
+      console.warn(`⚠️ EXTREME PROJECTION CAP: ${fullName} has unrealistic projection (${weeklyProjection}), capping at 200`);
+      weeklyProjection = 200;
+    }
+
+    const projectedPoints = weeklyProjection > 0 ? weeklyProjection : (seasonTotal > 0 ? seasonTotal / 17 : 0);
+
+    if (projectedPoints !== weeklyProjection || seasonTotal > 0) {
+      console.log(`📊 FINAL PLAYER DATA: ${fullName} (${position}) - weekly: ${projectedPoints.toFixed(1)}, season: ${seasonTotal || 'not set'}, source: ${weeklyProjection > 0 ? 'weekly projection' : 'estimated from season'}`);
+    }
+
+    return { projectedPoints, seasonProjectedPoints: seasonTotal };
+  }
+
+  private processPlayerData(playerData: any): Player {
+    const player = playerData.player || playerData;
+    const stats = player.stats || [];
+
+    // Use same logic as roster processing for consistency
+    const currentWeek = this.getCurrentWeek();
+    const position = player.defaultPositionId ? this.getPositionName(player.defaultPositionId) : 'Unknown';
+    const { projectedPoints: weeklyProjection, seasonProjectedPoints: seasonTotal } =
+      this.resolveProjectedPoints(player.fullName || 'Unknown', position, stats, currentWeek);
+    let actualPoints = 0;
+
     // Find actual points
-    const actualStat = stats.find((stat: any) => 
-      stat.statSourceId === 0 && 
+    const actualStat = stats.find((stat: any) =>
+      stat.statSourceId === 0 &&
       stat.scoringPeriodId === currentWeek
     );
     
@@ -584,10 +523,11 @@ export class ESPNApiService {
       firstName: player.firstName || '',
       lastName: player.lastName || '',
       fullName: player.fullName || '',
-      position: player.defaultPositionId ? this.getPositionName(player.defaultPositionId) : 'Unknown',
+      position,
       team: player.proTeamId ? this.getTeamAbbreviation(player.proTeamId) : 'FA',
       points: actualPoints,
       projectedPoints: weeklyProjection,
+      seasonProjectedPoints: seasonTotal,
       injuryStatus: player.injuryStatus || undefined,
       percentStarted: player.ownership?.percentStarted || 0,
       percentOwned: player.ownership?.percentOwned || 0
