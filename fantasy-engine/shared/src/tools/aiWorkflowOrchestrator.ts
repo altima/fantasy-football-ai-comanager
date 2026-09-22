@@ -270,7 +270,7 @@ ${league.starters.map((p: any) => {
   // Surface game-status flags (Questionable/Doubtful/Out/etc.) - these used to only
   // show up for the separate IR list, so a starter tagged Out was invisible here.
   let injuryFlag = '';
-  if (p.injuryStatus && p.injuryStatus.toUpperCase() !== 'ACTIVE') {
+  if (p.injuryStatus && !['ACTIVE', 'PROBABLE'].includes(p.injuryStatus.toUpperCase())) {
     injuryFlag = ` | ⚠️ ${p.injuryStatus}`;
   }
 
@@ -324,7 +324,7 @@ ${league.bench.map((p: any) => {
   }
 
   let injuryFlag = '';
-  if (p.injuryStatus && p.injuryStatus.toUpperCase() !== 'ACTIVE') {
+  if (p.injuryStatus && !['ACTIVE', 'PROBABLE'].includes(p.injuryStatus.toUpperCase())) {
     injuryFlag = ` | ⚠️ ${p.injuryStatus}`;
   }
 
@@ -397,7 +397,7 @@ ${league.availablePlayers ? Object.entries(league.availablePlayers).map(([positi
     }
 
     let injuryFlag = '';
-    if (p.injuryStatus && p.injuryStatus.toUpperCase() !== 'ACTIVE') {
+    if (p.injuryStatus && !['ACTIVE', 'PROBABLE'].includes(p.injuryStatus.toUpperCase())) {
       injuryFlag = ` | ⚠️ ${p.injuryStatus}`;
     }
 
